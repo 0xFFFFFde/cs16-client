@@ -117,6 +117,11 @@ void IN_ToggleButtons( float forwardmove, float sidemove )
 
 }
 
+void IN_ClientTouchEvent( int fingerID, float x, float y, float dx, float dy )
+{
+	
+}
+
 void IN_ClientMoveEvent( float forwardmove, float sidemove )
 {
 	//gEngfuncs.Con_Printf("IN_MoveEvent\n");
@@ -236,7 +241,7 @@ void DLLEXPORT IN_MouseEvent( int mstate )
 			gEngfuncs.Key_Event( K_MOUSE1 + i, 0 );
 		}
 	}	
-	
+
 	mouse_oldbuttonstate = mstate;
 	bMouseInUse = true;
 }
