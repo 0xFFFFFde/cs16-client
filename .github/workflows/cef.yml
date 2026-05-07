@@ -17,7 +17,7 @@ env:
   CEF_DIST_VERSION: "147.0.10-gd58e84d-chromium-147.0.7727.118"
 
 jobs:
-  cef-desktop:
+  build:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
@@ -129,6 +129,7 @@ jobs:
   publish-release:
     name: Publish GitHub Release (chromehtml)
     runs-on: ubuntu-latest
+    needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/chromehtml'
     permissions:
       contents: write
@@ -139,6 +140,7 @@ jobs:
           path: release-assets
           pattern: '*'
           merge-multiple: true
+        continue-on-error: true
 
       - name: Create rolling prerelease
         shell: bash
