@@ -1,0 +1,170 @@
+# Desktop client linked against CEF minimal binaries from CEF Automated Builds
+# https://cef-builds.spotifycdn.com/index.html
+
+name: CS16Client Chrome
+
+on:
+  push:
+    branches: [chromehtml]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CEF_DIST_VERSION: "147.0.10-gd58e84d-chromium-147.0.7727.118"
+
+jobs:
+  cef-desktop:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows-x64-CEF
+            os: windows-latest
+            cmake_preset: win32-ci-amd64
+            msvc_arch: amd64
+            cef_url: https://cef-builds.spotifycdn.com/cef_binary_147.0.10%2Bgd58e84d%2Bchromium-147.0.7727.118_windows64_minimal.tar.bz2
+            pkg_suffix: zip
+
+          - name: Windows-x86-CEF
+            os: windows-latest
+            cmake_preset: win32-ci-x86
+            msvc_arch: x86
+            cef_url: https://cef-builds.spotifycdn.com/cef_binary_147.0.10%2Bgd58e84d%2Bchromium-147.0.7727.118_windows32_minimal.tar.bz2
+            pkg_suffix: zip
+
+          - name: Linux-x64-CEF
+            os: ubuntu-latest
+            cmake_preset: linux-ci-amd64
+            cef_url: https://cef-builds.spotifycdn.com/cef_binary_147.0.10%2Bgd58e84d%2Bchromium-147.0.7727.118_linux64_minimal.tar.bz2
+            pkg_suffix: tar.gz
+
+          - name: macOS-x64-CEF
+            os: macos-15-intel
+            cmake_preset: macos-ci-x86_64
+            cef_url: https://cef-builds.spotifycdn.com/cef_binary_147.0.10%2Bgd58e84d%2Bchromium-147.0.7727.118_macosx64_minimal.tar.bz2
+            pkg_suffix: zip
+
+          - name: macOS-arm64-CEF
+            os: macos-latest
+            cmake_preset: macos-ci-arm64
+            cef_url: https://cef-builds.spotifycdn.com/cef_binary_147.0.10%2Bgd58e84d%2Bchromium-147.0.7727.118_macosarm64_minimal.tar.bz2
+            pkg_suffix: zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Fetch CEF binary distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          CEF_ROOT="$(python "${GITHUB_WORKSPACE}/scripts/ci_fetch_cef.py" "${{ matrix.cef_url }}" "${RUNNER_TEMP}/cef")"
+          echo "CEF_ROOT=${CEF_ROOT}" >> "${GITHUB_ENV}"
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      - name: Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libfontconfig-dev
+
+      - name: Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja gcc fontconfig
+
+      - name: Configure CMake
+        shell: bash
+        env:
+          CEF_ROOT: ${{ env.CEF_ROOT }}
+        run: cmake --preset "${{ matrix.cmake_preset }}" "-DCEF_ROOT=${CEF_ROOT}"
+
+      - name: Build
+        working-directory: build
+        shell: bash
+        run: |
+          N="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || echo 4)"
+          cmake --build . --parallel "${N}"
+
+      - name: Stage install tree
+        shell: bash
+        run: cmake --install build --prefix "${GITHUB_WORKSPACE}/cef-package"
+
+      - name: Archive package
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ env.CEF_DIST_VERSION }}"
+          if [[ "${{ matrix.pkg_suffix }}" == "tar.gz" ]]; then
+            OUT="CS16Client-${{ matrix.name }}-${VER}.tar.gz"
+            tar czf "${OUT}" -C cef-package .
+          else
+            OUT="CS16Client-${{ matrix.name }}-${VER}.zip"
+            (cd cef-package && cmake -E tar cf "../${OUT}" --format=zip .)
+          fi
+          ls -la "${OUT}"
+          echo "path=${GITHUB_WORKSPACE}/${OUT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ steps.archive.outputs.path }}
+
+  publish-release:
+    name: Publish GitHub Release (chromehtml)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/chromehtml'
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: '*'
+          merge-multiple: true
+
+      - name: Create rolling prerelease
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="chromehtml-cef"
+          SHA_SHORT="$(echo "${{ github.sha }}" | cut -c1-7)"
+          NOTES_FILE="$(mktemp)"
+          {
+            echo "Automated **chromehtml** + CEF desktop build."
+            echo ""
+            echo "- CEF: \`${{ env.CEF_DIST_VERSION }}\`"
+            echo "- Commit: [\`${SHA_SHORT}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})"
+          } > "${NOTES_FILE}"
+
+          mapfile -t FILES < <(find "${GITHUB_WORKSPACE}/release-assets" -type f \( -name '*.zip' -o -name '*.tar.gz' \) | sort)
+          if [[ ${#FILES[@]} -eq 0 ]]; then
+            echo "No artifacts found, skipping release"
+            exit 0
+          fi
+
+          gh release delete "${TAG}" --repo "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "${TAG}" --repo "${{ github.repository }}" \
+            --prerelease \
+            --title "CS16Client chromehtml + CEF (${{ env.CEF_DIST_VERSION }})" \
+            --notes-file "${NOTES_FILE}" \
+            "${FILES[@]}"
