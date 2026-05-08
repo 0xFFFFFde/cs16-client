@@ -14,6 +14,12 @@ ChromeInstance::~ChromeInstance()
 	Shutdown();
 }
 
+void ChromeInstance::SetPaintConsumer( ChromePaintConsumerFn consumer, void* userdata )
+{
+	paint_consumer_ = consumer;
+	paint_consumer_userdata_ = userdata;
+}
+
 bool ChromeInstance::Initialize( const char* start_url )
 {
 	if( initialized_.load() )
@@ -38,6 +44,9 @@ void ChromeInstance::Shutdown()
 	if( !initialized_.load() )
 		return;
 
+	paint_consumer_ = nullptr;
+	paint_consumer_userdata_ = nullptr;
+
 	if( backend_ )
 	{
 		backend_->Shutdown();
@@ -57,11 +66,11 @@ void ChromeInstance::LoadURL( const std::string& url )
 
 void ChromeInstance::Resize( int width, int height )
 {
-	browser_width_ = std::max( 0, width );
-	browser_height_ = std::max( 0, height );
-	texture_bridge_.EnsureSize( browser_width_, browser_height_ );
+	width_ = std::max( 0, width );
+	height_ = std::max( 0, height );
+	texture_bridge_.EnsureSize( width_, height_ );
 	if( backend_ )
-		backend_->Resize( browser_width_, browser_height_ );
+		backend_->Resize( width_, height_ );
 }
 
 void ChromeInstance::Tick()
@@ -99,6 +108,9 @@ void ChromeInstance::OnCefPaint( const std::uint8_t* rgba, int width, int height
 {
 	if( !rgba || width <= 0 || height <= 0 )
 		return;
+
+	if( paint_consumer_ )
+		paint_consumer_( paint_consumer_userdata_, rgba, width, height );
 
 	FrameBuffer next;
 	next.width = width;

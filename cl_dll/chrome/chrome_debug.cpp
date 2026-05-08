@@ -11,20 +11,20 @@ namespace
 cvar_t* cl_chrome_debug = nullptr;
 }
 
-void ChromeDebug_Init()
+void Chrome_Init()
 {
 	if( cl_chrome_debug )
 		return;
 
-	cl_chrome_debug = CVAR_CREATE( "cl_chrome_debug", "0", FCVAR_ARCHIVE );
+	cl_chrome_debug = CVAR_CREATE( "cl_chrome_debug", "1", FCVAR_ARCHIVE );
 }
 
-float ChromeDebug_Level()
+float Chrome_Level()
 {
 	return cl_chrome_debug ? cl_chrome_debug->value : 0.f;
 }
 
-void ChromeDebug_DPrintf( float min_level, const char* fmt, ... )
+void Chrome_DPrintf( float min_level, const char* fmt, ... )
 {
 	if( !cl_chrome_debug || cl_chrome_debug->value < min_level )
 		return;
@@ -38,7 +38,7 @@ void ChromeDebug_DPrintf( float min_level, const char* fmt, ... )
 	gEngfuncs.Con_DPrintf( "%s", msg );
 }
 
-void ChromeDebug_Msg( const char* fmt, ... )
+void Chrome_Printf( const char* fmt, ... )
 {
 	char msg[2048];
 	va_list args;

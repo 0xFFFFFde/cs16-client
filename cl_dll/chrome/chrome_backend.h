@@ -23,7 +23,7 @@ public:
 };
 
 std::unique_ptr<ChromeBackend> CreateChromeBackend();
-// Page scale: 1.0 = 100% size, 0.8 ≈ 80%. Mapped to CEF SetZoomLevel (log scale).
+
 void SetChromeZoom( double scale );
 void SetChromeFrameRate( int frames_per_second );
 } // namespace CEF

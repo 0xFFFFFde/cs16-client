@@ -14,7 +14,7 @@ struct FrameBuffer
 	std::vector<std::uint8_t> rgba;
 };
 
-struct BrowserRect
+struct ChromeRect
 {
 	int x = 0;
 	int y = 0;

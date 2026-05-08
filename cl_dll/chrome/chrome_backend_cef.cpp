@@ -13,10 +13,6 @@
 #include "cef_client.h"
 #include "cef_parser.h"
 #include "cef_render_handler.h"
-#if defined(XASH_APPLE)
-#include "internal/cef_types_mac.h"
-#endif
-#include "keydefs.h"
 
 namespace iHTMLChrome {
 namespace CEF {
@@ -53,72 +49,6 @@ double PageScaleToCEFZoomLevel( double scale )
 	if( level > 10.0 )
 		level = 10.0;
 	return level;
-}
-
-int EngineKeyToCEFKey( int key )
-{
-	if( key >= 'a' && key <= 'z' )
-		return key - 'a' + 'A';
-	if( key >= 32 && key <= 126 )
-		return key;
-
-	switch( key )
-	{
-	case K_BACKSPACE: return 0x08; // VK_BACK
-	case K_DEL: return 0x08; // VK_DELETE
-	case K_TAB: return 0x09; // VK_TAB
-	case K_ENTER:
-	case K_KP_ENTER: return 0x0D; // VK_RETURN
-#if defined(XASH_APPLE)
-	case K_WIN: return 0x0D; // VK_RETURN
-#endif
-	case K_SHIFT: return 0x10; // VK_SHIFT
-	case K_CTRL: return 0x11; // VK_CONTROL
-	case K_ALT: return 0x12; // VK_MENU
-	case K_ESCAPE: return 0x1B; // VK_ESCAPE
-	case K_SPACE: return 0x20; // VK_SPACE
-	case K_PGUP: return 0x21; // VK_PRIOR
-	case K_PGDN: return 0x22; // VK_NEXT
-	case K_END: return 0x23; // VK_END
-	case K_HOME: return 0x24; // VK_HOME
-	case K_LEFTARROW: return 0x25; // VK_LEFT
-	case K_UPARROW: return 0x26; // VK_UP
-	case K_RIGHTARROW: return 0x27; // VK_RIGHT
-	case K_DOWNARROW: return 0x28; // VK_DOWN
-	case K_KP_HOME: return 0x24; // VK_HOME
-	case K_KP_UPARROW: return 0x26; // VK_UP
-	case K_KP_PGUP: return 0x21; // VK_PRIOR
-	case K_KP_LEFTARROW: return 0x25; // VK_LEFT
-	case K_KP_RIGHTARROW: return 0x27; // VK_RIGHT
-	case K_KP_END: return 0x23; // VK_END
-	case K_KP_DOWNARROW: return 0x28; // VK_DOWN
-	case K_KP_PGDN: return 0x22; // VK_NEXT
-	case K_KP_DEL: return 0x08; // match K_DEL → backspace semantics
-	case K_INS: return 0x2D; // VK_INSERT
-	case K_KP_INS: return 0x2D; // VK_INSERT
-	case K_F1: return 0x70; // VK_F1
-	case K_F2: return 0x71;
-	case K_F3: return 0x72;
-	case K_F4: return 0x73;
-	case K_F5: return 0x74;
-	case K_F6: return 0x75;
-	case K_F7: return 0x76;
-	case K_F8: return 0x77;
-	case K_F9: return 0x78;
-	case K_F10: return 0x79;
-	case K_F11: return 0x7A;
-	case K_F12: return 0x7B; // VK_F12
-	default: return key;
-	}
-}
-
-void BuildCEFKeyCodes( int key, int& out_windows_key_code, int& out_native_key_code )
-{
-	// This input path receives engine key codes, not OS-native scan codes.
-	// Treat values consistently as engine keys to avoid accidental remaps
-	// (e.g. engine Enter=13 being interpreted as mac native keycode 13 -> 'W').
-	out_windows_key_code = EngineKeyToCEFKey( key );
-	out_native_key_code = 0;
 }
 
 class CEFRenderClient final : public CefClient, public CefLifeSpanHandler, public CefRenderHandler, public CefLoadHandler
@@ -163,74 +93,10 @@ public:
 
 	void SendInput( const InputEvent& event )
 	{
-		if( !instance_ || !browser_ || !browser_->GetHost() )
-			return;
-
-		CefRefPtr<CefBrowserHost> host = browser_->GetHost();
-		CefMouseEvent mouse_event;
-		mouse_event.x = event.x;
-		mouse_event.y = event.y;
-
-		switch( event.type )
-		{
-		case InputType::MouseMove:
-			host->SendMouseMoveEvent( mouse_event, false );
-			break;
-		case InputType::MouseDown:
-		case InputType::MouseUp:
-		{
-			host->SetFocus( true );
-			CefBrowserHost::MouseButtonType button = MBT_LEFT;
-			if( event.button == 1 )
-				button = MBT_RIGHT;
-			else if( event.button == 2 )
-				button = MBT_MIDDLE;
-			host->SendMouseClickEvent( mouse_event, button, event.type == InputType::MouseUp, 1 );
-			break;
-		}
-		case InputType::MouseWheel:
-			host->SendMouseWheelEvent( mouse_event, event.delta_x, event.delta_y );
-			break;
-		case InputType::KeyDown:
-		case InputType::KeyUp:
-		{
-			host->SetFocus( true );
-			int windows_key_code = 0;
-			int native_key_code = 0;
-			BuildCEFKeyCodes( event.key, windows_key_code, native_key_code );
-			CefKeyEvent key_event;
-			key_event.type = event.type == InputType::KeyDown ? KEYEVENT_RAWKEYDOWN : KEYEVENT_KEYUP;
-			key_event.windows_key_code = windows_key_code;
-			key_event.native_key_code = native_key_code;
-			key_event.character = 0;
-			key_event.unmodified_character = 0;
-			key_event.focus_on_editable_field = true;
-			host->SendKeyEvent( key_event );
-			break;
-		}
-		case InputType::KeyChar:
-		{
-			host->SetFocus( true );
-			CefKeyEvent key_event;
-			key_event.type = KEYEVENT_CHAR;
-			key_event.windows_key_code = static_cast<int>( event.codepoint );
-			key_event.native_key_code = 0;
-			key_event.character = static_cast<char16_t>( event.codepoint );
-			key_event.unmodified_character = static_cast<char16_t>( event.codepoint );
-			key_event.focus_on_editable_field = true;
-			host->SendKeyEvent( key_event );
-			break;
-		}
-		case InputType::TouchDown:
-		case InputType::TouchMove:
-		case InputType::TouchUp:
-			// Keep mobile support functional even before full CefTouchEvent mapping.
-			if( event.type == InputType::TouchMove )
-				host->SendMouseMoveEvent( mouse_event, false );
-			else
-				host->SendMouseClickEvent( mouse_event, MBT_LEFT, event.type == InputType::TouchUp, 1 );
-			break;
-		}
+		(void)event;
+		Chrome_DPrintf(
+			1.f,
+			"[chrome] SendInput stub (TODO: wire CEF keyboard/mouse once input adapter is implemented)\n" );
 	}
 
 	void ApplyZoomLevel()
@@ -364,7 +230,7 @@ public:
 			return;
 		if( static_cast<int>( code ) == -3 )
 			return;
-		ChromeDebug_DPrintf( 1.f, "[browser] CEF load: main frame load error code=%d text='%s' url='%s'\n",
+		Chrome_DPrintf( 1.f, "[browser] CEF load: main frame load error code=%d text='%s' url='%s'\n",
 			static_cast<int>( code ), error_text.ToString().c_str(), failed_url.ToString().c_str() );
 	}
 
@@ -393,7 +259,7 @@ public:
 		client_ = new CEFRenderClient( instance_ );
 
 		CefWindowInfo window_info;
-#if defined(_WIN32)
+#if defined(XASH_WIN32)
 		window_info.SetAsWindowless( nullptr );
 #else
 		window_info.SetAsWindowless( 0 );

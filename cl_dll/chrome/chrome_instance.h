@@ -12,6 +12,10 @@
 
 namespace iHTMLChrome {
 namespace CEF {
+
+using ChromePaintConsumerFn =
+	void (*)( void* userdata, const std::uint8_t* rgba, int width, int height );
+
 class ChromeInstance
 {
 public:
@@ -20,6 +24,8 @@ public:
 
 	bool Initialize( const char* start_url = nullptr );
 	void Shutdown();
+
+	void SetPaintConsumer( ChromePaintConsumerFn consumer, void* userdata );
 
 	void LoadURL( const std::string& url );
 	void Resize( int width, int height );
@@ -30,10 +36,10 @@ public:
 
 	int id() const { return id_; }
 	const std::string& url() const { return url_; }
-	const BrowserRect& viewport() const { return viewport_; }
-	void set_viewport( const BrowserRect& viewport ) { viewport_ = viewport; }
-	int browser_width() const { return browser_width_; }
-	int browser_height() const { return browser_height_; }
+	const ChromeRect& viewport() const { return viewport_; }
+	void set_viewport( const ChromeRect& viewport ) { viewport_ = viewport; }
+	int width() const { return width_; }
+	int height() const { return height_; }
 	unsigned int texture_id() const { return texture_bridge_.texture_id(); }
 
 private:
@@ -41,9 +47,9 @@ private:
 
 	int id_ = -1;
 	std::string url_;
-	BrowserRect viewport_;
-	int browser_width_ = 0;
-	int browser_height_ = 0;
+	ChromeRect viewport_;
+	int width_ = 0;
+	int height_ = 0;
 
 	TextureBridge texture_bridge_;
 	std::atomic<bool> initialized_{ false };
@@ -56,6 +62,9 @@ private:
 	std::mutex input_mutex_;
 	std::queue<InputEvent> pending_input_;
 	std::unique_ptr<ChromeBackend> backend_;
+
+	ChromePaintConsumerFn paint_consumer_ = nullptr;
+	void* paint_consumer_userdata_ = nullptr;
 };
 } // namespace CEF
 } // namespace iHTMLChrome
