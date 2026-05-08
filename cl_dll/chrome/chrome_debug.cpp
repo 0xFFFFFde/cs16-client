@@ -11,7 +11,7 @@ namespace
 cvar_t* cl_chrome_debug = nullptr;
 }
 
-void Chrome_Init()
+void Chrome_DInit()
 {
 	if( cl_chrome_debug )
 		return;

@@ -12,7 +12,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -59,7 +58,7 @@ void EraseInstanceRecord( int instance_id )
 
 void RegisterEngineCvars()
 {
-	Chrome_Init();
+	Chrome_DInit();
 
 	if( !cl_chrome_zoom )
 		cl_chrome_zoom = CVAR_CREATE( "cl_chrome_zoom", "1", FCVAR_ARCHIVE );
