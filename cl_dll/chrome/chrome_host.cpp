@@ -4,17 +4,17 @@
 #include "chrome_instance.h"
 #include "chrome_runtime.h"
 
-#include "hud.h"
-#include "cl_util.h"
-#include "draw_util.h"
-#include "render_api.h"
-#include "triangleapi.h"
-
 #include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <unordered_map>
+
+#include "hud.h"
+#include "cl_util.h"
+#include "draw_util.h"
+#include "render_api.h"
+#include "triangleapi.h"
 
 namespace
 {
