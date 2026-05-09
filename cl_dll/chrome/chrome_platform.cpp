@@ -36,29 +36,6 @@ bool Utf8ToWide( const std::string& utf8, std::wstring& out )
 	return true;
 }
 
-bool LoadOptionalChromeElf( const std::filesystem::path& cef_dir_path )
-{
-	const std::filesystem::path elf_path = cef_dir_path / "chrome_elf.dll";
-	if( !std::filesystem::exists( elf_path ) )
-		return true;
-
-	std::wstring elf_wide;
-	if( !Utf8ToWide( elf_path.generic_string(), elf_wide ) )
-		return false;
-
-	HMODULE elf_module = LoadLibraryExW(
-		elf_wide.c_str(),
-		nullptr,
-		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
-	if( !elf_module )
-	{
-		Chrome_Printf( "[chrome] preload chrome_elf.dll failed (err=%lu)\n",
-			static_cast<unsigned long>( GetLastError() ) );
-		return false;
-	}
-
-	return true;
-}
 } // namespace
 #endif
 
@@ -111,12 +88,23 @@ CefMainArgs Platform_CreateMainArgs()
 
 bool Platform_LoadCEF( const CefEnvironment& env )
 {
-#if defined(_WIN32)
+	#if defined(_WIN32)
+
 	const std::filesystem::path cef_dir_path( env.cefDir );
-	if( !LoadOptionalChromeElf( cef_dir_path ) )
+
+	std::wstring cef_dir_wide;
+	if( !Utf8ToWide( cef_dir_path.generic_string(), cef_dir_wide ) )
 		return false;
 
-	const std::filesystem::path libcef_path = cef_dir_path / "libcef.dll";
+	SetDefaultDllDirectories(
+		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
+		LOAD_LIBRARY_SEARCH_USER_DIRS );
+
+	AddDllDirectory( cef_dir_wide.c_str() );
+
+	const std::filesystem::path libcef_path =
+		cef_dir_path / "libcef.dll";
+
 	std::wstring libcef_wide;
 	if( !Utf8ToWide( libcef_path.generic_string(), libcef_wide ) )
 		return false;
@@ -124,17 +112,27 @@ bool Platform_LoadCEF( const CefEnvironment& env )
 	HMODULE module = LoadLibraryExW(
 		libcef_wide.c_str(),
 		nullptr,
-		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
+		LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR |
+		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
+		LOAD_LIBRARY_SEARCH_USER_DIRS );
+
 	if( !module )
 	{
-		Chrome_Printf( "[chrome] LoadLibrary(libcef.dll) failed %s (err=%lu)\n",
+		Chrome_Printf(
+			"[chrome] LoadLibrary(libcef.dll) failed %s (err=%lu)\n",
 			libcef_path.generic_string().c_str(),
 			static_cast<unsigned long>( GetLastError() ) );
+
 		return false;
 	}
 
-	Chrome_DPrintf( 1.f, "[chrome] loaded %s\n", libcef_path.generic_string().c_str() );
+	Chrome_DPrintf(
+		1.f,
+		"[chrome] loaded %s\n",
+		libcef_path.generic_string().c_str() );
+
 	return true;
+
 #elif defined(__linux__)
 	const std::filesystem::path libcef_path = std::filesystem::path( env.cefDir ) / "libcef.so";
 	if( !dlopen( libcef_path.generic_string().c_str(), RTLD_NOW | RTLD_GLOBAL ) )
